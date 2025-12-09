@@ -1,7 +1,27 @@
-// src/services/api.js - Complete with Settings Support
+// src/services/api.js - Production & Development Compatible
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5001/api';
+// ===================================================================
+// 🌐 SMART API URL DETECTION
+// Works automatically in both development and production
+// ===================================================================
+const getApiUrl = () => {
+  // Priority 1: Environment variable (set in Vercel/Netlify)
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+  
+  // Priority 2: Detect if running in production (deployed)
+  if (process.env.NODE_ENV === 'production') {
+    // If you're on Vercel and backend is on Render, set this in Vercel env vars
+    return 'https://your-backend.onrender.com/api';
+  }
+  
+  // Priority 3: Local development
+  return 'http://localhost:5001/api';
+};
+
+const API_BASE_URL = getApiUrl();
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -46,9 +66,13 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error?.response?.status === 401) {
-      console.warn('Unauthorized - clearing token');
+      console.warn('⚠️ Unauthorized - clearing token');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      // Only redirect if not already on login page
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
@@ -71,7 +95,7 @@ export async function uploadDocument(file, onProgress) {
   const formData = new FormData();
   formData.append('document', file);
 
-  // ✅ FIXED: Extended timeout for OCR processing
+  // ✅ Extended timeout for OCR processing
   const res = await api.post('/documents/upload', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
@@ -196,8 +220,23 @@ export async function exportConversation(conversationId) {
 // ===================================================================
 
 export async function checkHealth() {
-  const res = await axios.get(`${API_BASE_URL.replace('/api', '')}/api/health`);
+  // Remove /api from base URL for health check
+  const healthUrl = API_BASE_URL.replace('/api', '') + '/api/health';
+  const res = await axios.get(healthUrl);
   return res.data;
+}
+
+// ===================================================================
+// DEBUG INFO (logs configuration on startup)
+// ===================================================================
+if (process.env.NODE_ENV === 'development') {
+  console.log('═══════════════════════════════════════════════');
+  console.log('🌐 API Configuration');
+  console.log('═══════════════════════════════════════════════');
+  console.log('📍 Base URL:', API_BASE_URL);
+  console.log('🏗️  Environment:', process.env.NODE_ENV);
+  console.log('⚙️  Using env var:', !!process.env.REACT_APP_API_URL);
+  console.log('═══════════════════════════════════════════════');
 }
 
 export default api;
