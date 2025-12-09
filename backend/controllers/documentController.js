@@ -6,6 +6,7 @@ const pdfParse = require('pdf-parse');
 const { v4: uuidv4 } = require('uuid');
 const Document = require('../models/Document');
 const ragService = require('../services/ragService');
+const ocrService = require('../services/ocrService');
 
 // AWS S3 Configuration
 const AWS = require('aws-sdk');
@@ -20,7 +21,16 @@ async function extractTextFromFile(filePath, mimetype) {
   const buffer = await fsPromises.readFile(filePath);
   if (mimetype === 'application/pdf') {
     const pdf = await pdfParse(buffer);
-    return pdf.text || '';
+    const regularText = pdf.text || '';
+    
+    // Use smart extraction with OCR if available
+    try {
+      const smartText = await ocrService.smartExtractText(filePath, mimetype, regularText);
+      return smartText;
+    } catch (ocrErr) {
+      console.warn('OCR processing failed, using regular extraction:', ocrErr.message);
+      return regularText;
+    }
   }
   // plain text
   return buffer.toString('utf8') || '';
@@ -136,17 +146,27 @@ exports.uploadDocumentMultipart = async (req, res) => {
 
     const file = req.file;
     const filePath = file.path;
-    console.log('File saved to disk at:', filePath);
+    console.log('📁 File saved to disk at:', filePath);
 
-    // Extract text
+    // Extract text (with OCR support)
     let textContent = '';
     try {
+      console.log('📝 Extracting text from:', file.originalname);
       textContent = await extractTextFromFile(filePath, file.mimetype);
+      console.log(`✅ Text extracted: ${textContent.length} characters`);
+      
+      // Log OCR availability status
+      if (ocrService.isAvailable) {
+        console.log('✅ OCR available for scanned documents');
+      } else {
+        console.log('⚠️ OCR not available (text-only PDFs supported)');
+      }
     } catch (extractErr) {
-      console.warn('Text extraction failed:', extractErr.message);
+      console.warn('⚠️ Text extraction failed:', extractErr.message);
     }
 
     // Upload to S3
+    console.log('☁️ Uploading to S3...');
     const buffer = await fsPromises.readFile(filePath);
     const s3Key = `documents/${userId || 'public'}/${Date.now()}-${uuidv4()}-${file.originalname}`;
     const s3Params = {
@@ -173,23 +193,27 @@ exports.uploadDocumentMultipart = async (req, res) => {
     });
 
     await document.save();
+    console.log('✅ Document saved to DB:', document._id);
 
     // Index in RAG
+    console.log('🔄 Indexing document in vector store...');
     let vectorIds = [];
     try {
       vectorIds = await ragService.indexDocument(document._id.toString(), document.textContent || '');
       document.vectorIds = vectorIds;
       document.processedAt = new Date();
       await document.save();
+      console.log('✅ Document indexed with', vectorIds.length, 'vectors');
     } catch (indexErr) {
-      console.warn('Indexing failed:', indexErr);
+      console.warn('⚠️ Indexing failed:', indexErr);
     }
 
     // Cleanup local file
     try { 
-      await fsPromises.unlink(file.path); 
+      await fsPromises.unlink(file.path);
+      console.log('🗑️ Local file deleted');
     } catch (e) {
-      console.warn('Failed to delete temp file:', e.message);
+      console.warn('⚠️ Failed to delete temp file:', e.message);
     }
 
     return res.status(201).json({
@@ -198,11 +222,12 @@ exports.uploadDocumentMultipart = async (req, res) => {
       document: {
         id: document._id,
         originalName: document.originalName,
-        size: document.size
+        size: document.size,
+        hasOCR: ocrService.isAvailable
       }
     });
   } catch (err) {
-    console.error('Multipart upload error:', err);
+    console.error('❌ Multipart upload error:', err);
     // Cleanup on error
     if (req.file && req.file.path) {
       await fsPromises.unlink(req.file.path).catch(() => {});
@@ -218,13 +243,18 @@ exports.uploadDocumentMultipart = async (req, res) => {
 // -------------------- Get documents --------------------
 exports.getDocuments = async (req, res) => {
   try {
+    const userId = req.user ? req.user._id : null;
+    console.log(`📚 Fetching documents for user: ${req.user ? req.user.email : 'anonymous'}`);
+    
     const query = req.user ? { userId: req.user._id } : {};
     const documents = await Document.find(query)
       .select('filename originalName uploadedAt size processedAt vectorIds userId s3Url')
       .sort({ uploadedAt: -1 });
+    
+    console.log(`✅ Found ${documents.length} documents`);
     return res.json({ success: true, count: documents.length, documents });
   } catch (err) {
-    console.error('Get documents error:', err);
+    console.error('❌ Get documents error:', err);
     return res.status(500).json({ success: false, message: 'Failed to fetch documents' });
   }
 };
@@ -240,7 +270,7 @@ exports.getDocument = async (req, res) => {
     }
     return res.json({ success: true, document });
   } catch (err) {
-    console.error('Get document error:', err);
+    console.error('❌ Get document error:', err);
     return res.status(500).json({ success: false, message: 'Failed to fetch document' });
   }
 };
@@ -256,6 +286,8 @@ exports.deleteDocument = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Document not found' });
     }
 
+    console.log('🗑️ Deleting document:', document._id);
+
     // Delete from S3
     try {
       if (document.s3Key) {
@@ -263,17 +295,29 @@ exports.deleteDocument = async (req, res) => {
           Bucket: process.env.AWS_BUCKET_NAME, 
           Key: document.s3Key 
         }).promise();
+        console.log('✅ Deleted from S3');
       }
     } catch (s3err) {
-      console.warn('S3 deletion warning:', s3err);
+      console.warn('⚠️ Could not delete from S3:', s3err.message);
+    }
+
+    // Delete vectors from Pinecone (if exists)
+    try {
+      if (document.vectorIds && document.vectorIds.length > 0) {
+        await ragService.deleteDocumentVectors(document._id.toString());
+        console.log('✅ Vectors deleted from Pinecone');
+      }
+    } catch (vecErr) {
+      console.warn('⚠️ Could not delete vectors:', vecErr.message);
     }
 
     // Remove DB record
     await Document.deleteOne({ _id: document._id });
+    console.log('✅ Document deleted from DB');
 
     return res.json({ success: true, message: 'Document deleted successfully' });
   } catch (err) {
-    console.error('Delete document error:', err);
+    console.error('❌ Delete document error:', err);
     return res.status(500).json({ success: false, message: 'Failed to delete document' });
   }
 };

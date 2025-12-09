@@ -1,26 +1,52 @@
-// backend/services/ocrService.js - NEW FILE
-// Install: npm install tesseract.js pdf-poppler
-
-const Tesseract = require('tesseract.js');
-const { convert } = require('pdf-poppler');
+// backend/services/ocrService.js
 const fs = require('fs').promises;
 const path = require('path');
 
+// Try to load OCR dependencies - may fail on some platforms
+let Tesseract;
+let convert;
+let isOCRAvailable = false;
+
+try {
+  // Check if platform supports OCR (Tesseract has issues on some Linux systems)
+  if (process.platform === 'linux') {
+    console.log('⚠️ OCR disabled on Linux platform (Render/deployment compatibility)');
+    isOCRAvailable = false;
+  } else {
+    Tesseract = require('tesseract.js');
+    const pdfPoppler = require('pdf-poppler');
+    convert = pdfPoppler.convert;
+    isOCRAvailable = true;
+    console.log('🔍 OCR Service initialized');
+  }
+} catch (error) {
+  console.log('⚠️ OCR dependencies not available:', error.message);
+  isOCRAvailable = false;
+}
+
 class OCRService {
   constructor() {
-    console.log('🔍 OCR Service initialized');
+    this.isAvailable = isOCRAvailable;
+    if (!isOCRAvailable) {
+      console.log('⚠️ OCR Service running in limited mode (text-only PDFs)');
+    }
   }
 
   /**
    * Extract text from image using Tesseract OCR
    */
   async extractTextFromImage(imagePath) {
+    if (!isOCRAvailable) {
+      console.log('⚠️ OCR not available on this platform');
+      return { text: '', confidence: 0 };
+    }
+
     try {
       console.log('🔍 Running OCR on image:', imagePath);
 
       const result = await Tesseract.recognize(
         imagePath,
-        'eng', // Language: English
+        'eng',
         {
           logger: (m) => {
             if (m.status === 'recognizing text') {
@@ -38,7 +64,7 @@ class OCRService {
 
     } catch (error) {
       console.error('❌ OCR error:', error);
-      throw error;
+      return { text: '', confidence: 0 };
     }
   }
 
@@ -72,6 +98,11 @@ class OCRService {
    * Convert PDF to images and run OCR on each page
    */
   async extractTextFromScannedPDF(pdfPath) {
+    if (!isOCRAvailable) {
+      console.log('⚠️ OCR not available - cannot process scanned PDF');
+      return { text: '', pages: [], averageConfidence: 0 };
+    }
+
     try {
       console.log('📄 Converting scanned PDF to images...');
 
@@ -84,7 +115,7 @@ class OCRService {
         format: 'png',
         out_dir: tempDir,
         out_prefix: 'page',
-        page: null // All pages
+        page: null
       };
 
       await convert(pdfPath, options);
@@ -93,7 +124,7 @@ class OCRService {
       const files = await fs.readdir(tempDir);
       const imageFiles = files
         .filter(f => f.endsWith('.png'))
-        .sort(); // Ensure correct page order
+        .sort();
 
       console.log(`✅ Generated ${imageFiles.length} page images`);
 
@@ -135,7 +166,7 @@ class OCRService {
 
     } catch (error) {
       console.error('❌ Scanned PDF OCR error:', error);
-      throw error;
+      return { text: '', pages: [], averageConfidence: 0 };
     }
   }
 
@@ -157,6 +188,12 @@ class OCRService {
         return regularText;
       }
 
+      if (!isOCRAvailable) {
+        console.log('⚠️ PDF appears to be scanned, but OCR is not available on this platform');
+        console.log('📝 Returning extracted text (may be incomplete)');
+        return regularText || '';
+      }
+
       // Run OCR for scanned PDF
       console.log('🔍 Running OCR on scanned PDF...');
       const ocrResult = await this.extractTextFromScannedPDF(filePath);
@@ -171,7 +208,6 @@ class OCRService {
 
     } catch (error) {
       console.error('❌ Smart extraction error:', error);
-      // Return whatever text we have
       return regularText || '';
     }
   }
@@ -180,6 +216,11 @@ class OCRService {
    * Extract text from image file (JPG, PNG, etc.)
    */
   async extractFromImageFile(imagePath) {
+    if (!isOCRAvailable) {
+      console.log('⚠️ OCR not available - cannot extract from image');
+      return '';
+    }
+
     try {
       const result = await this.extractTextFromImage(imagePath);
       return result.text;
