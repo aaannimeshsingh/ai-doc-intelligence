@@ -1,37 +1,45 @@
-// backend/server.js - PRODUCTION READY VERSION
+// backend/server.js
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
-const Groq = require('groq-sdk');
+const mongoose = require('mongoose');
 require('dotenv').config();
 
 const app = express();
 
-// ===================================================================
-// MIDDLEWARE
-// ===================================================================
-
-// Dynamic CORS Configuration for Production & Development
-const allowedOrigins = process.env.NODE_ENV === 'production' 
-  ? [process.env.FRONTEND_URL] 
-  : ['http://localhost:3000', 'http://localhost:3001','ai-doc-intelligence.vercel.app'];
-
-app.use(cors({
+// CORS Configuration - MUST be before routes
+const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, Postman, etc.)
+    // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://ai-doc-intelligence-git-main-aaannimeshsinghs-projects.vercel.app'
+    ];
+    
+    // Allow any Vercel deployment
+    if (origin.endsWith('.vercel.app')) {
+      return callback(null, true);
     }
-    return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    callback(new Error('Not allowed by CORS'));
   },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true
-}));
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
 
+app.use(cors(corsOptions));
+
+// Body parsers
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
