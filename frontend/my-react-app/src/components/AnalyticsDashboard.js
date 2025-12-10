@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { API_URL, getAuthHeaders } from '../config/api';
 import './AnalyticsDashboard.css';
 
 const AnalyticsDashboard = () => {
@@ -17,10 +18,9 @@ const AnalyticsDashboard = () => {
     try {
       setLoading(true);
       setError(null);
-      const token = localStorage.getItem('token');
       
-      const response = await fetch(`http://localhost:5001/api/analytics?userId=${user.id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const response = await fetch(`${API_URL}/api/analytics?userId=${user.id}`, {
+        headers: getAuthHeaders()
       });
 
       const data = await response.json();

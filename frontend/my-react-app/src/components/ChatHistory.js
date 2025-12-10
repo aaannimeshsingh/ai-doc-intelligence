@@ -1,7 +1,8 @@
-// frontend/src/components/ChatHistory.js
+// src/components/ChatHistory.js
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { API_URL, getAuthHeaders } from '../config/api';
 import './ChatHistory.css';
 
 const ChatHistory = () => {
@@ -21,9 +22,8 @@ const ChatHistory = () => {
       const params = new URLSearchParams({ userId: user.id });
       if (filterStarred) params.append('starred', 'true');
 
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/conversations?${params}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const response = await fetch(`${API_URL}/api/conversations?${params}`, {
+        headers: getAuthHeaders()
       });
       
       const data = await response.json();
@@ -53,13 +53,9 @@ const ChatHistory = () => {
     }
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/conversations/search', {
+      const response = await fetch(`${API_URL}/api/conversations/search`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ userId: user.id, searchTerm })
       });
 
@@ -76,10 +72,9 @@ const ChatHistory = () => {
 
   const toggleStar = async (conversationId) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/conversations/${conversationId}/star`, {
+      const response = await fetch(`${API_URL}/api/conversations/${conversationId}/star`, {
         method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: getAuthHeaders()
       });
 
       const data = await response.json();
@@ -103,10 +98,9 @@ const ChatHistory = () => {
     }
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/conversations/${conversationId}`, {
+      const response = await fetch(`${API_URL}/api/conversations/${conversationId}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: getAuthHeaders()
       });
 
       const data = await response.json();
@@ -125,9 +119,8 @@ const ChatHistory = () => {
 
   const viewConversation = async (conversationId) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/conversations/${conversationId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const response = await fetch(`${API_URL}/api/conversations/${conversationId}`, {
+        headers: getAuthHeaders()
       });
       const data = await response.json();
 

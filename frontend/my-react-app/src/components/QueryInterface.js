@@ -1,6 +1,7 @@
 // src/components/QueryInterface.js
 import React, { useState, useEffect } from 'react';
 import { queryDocuments, getDocuments } from '../services/api';
+import { API_URL, getAuthHeaders } from '../config/api';
 import './QueryInterface.css';
 
 function QueryInterface() {
@@ -18,7 +19,6 @@ function QueryInterface() {
   }, []);
 
   useEffect(() => {
-    // Load suggestions when document changes
     if (selectedDoc && selectedDoc !== 'all') {
       loadSuggestions(selectedDoc);
     } else {
@@ -31,7 +31,6 @@ function QueryInterface() {
       const docs = await getDocuments();
       setDocuments(docs);
       
-      // Auto-select the most recent document
       if (docs.length > 0) {
         setSelectedDoc(docs[0]._id);
       }
@@ -43,9 +42,8 @@ function QueryInterface() {
   const loadSuggestions = async (docId) => {
     try {
       setLoadingSuggestions(true);
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/documents/${docId}/suggestions`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const response = await fetch(`${API_URL}/api/documents/${docId}/suggestions`, {
+        headers: getAuthHeaders()
       });
       const data = await response.json();
       if (data.success && data.suggestions) {
@@ -77,15 +75,8 @@ function QueryInterface() {
     try {
       const documentId = selectedDoc === 'all' ? null : selectedDoc;
       
-      console.log('🔍 Querying with:', {
-        question,
-        documentId,
-        selectedDoc
-      });
-
       const result = await queryDocuments(question, documentId);
 
-      // Add to conversation history
       const newEntry = {
         question,
         answer: result.answer,
@@ -97,7 +88,7 @@ function QueryInterface() {
       };
 
       setConversationHistory(prev => [newEntry, ...prev]);
-      setQuestion(''); // Clear input
+      setQuestion('');
       
     } catch (err) {
       console.error('Query error:', err);
@@ -114,30 +105,24 @@ function QueryInterface() {
 
   const exportAsPDF = async () => {
     try {
-      // Check if there's conversation history
       if (conversationHistory.length === 0) {
         setError('No conversation to export. Ask a question first!');
         return;
       }
 
-      const token = localStorage.getItem('token');
       const docName = selectedDoc === 'all' 
         ? 'All Documents' 
         : documents.find(d => d._id === selectedDoc)?.originalName || 'Unknown Document';
 
-      const response = await fetch('http://localhost:5001/api/export/conversation/pdf', {
+      const response = await fetch(`${API_URL}/api/export/conversation/pdf`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           conversation: conversationHistory,
           documentName: docName
         })
       });
 
-      // Check if response is OK before creating blob
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Export failed' }));
         throw new Error(errorData.message || `Export failed with status ${response.status}`);
@@ -152,8 +137,6 @@ function QueryInterface() {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-      
-      console.log('✅ PDF exported successfully');
     } catch (err) {
       console.error('Export failed:', err);
       setError(`Failed to export: ${err.message}`);
@@ -162,30 +145,24 @@ function QueryInterface() {
 
   const exportAsTXT = async () => {
     try {
-      // Check if there's conversation history
       if (conversationHistory.length === 0) {
         setError('No conversation to export. Ask a question first!');
         return;
       }
 
-      const token = localStorage.getItem('token');
       const docName = selectedDoc === 'all' 
         ? 'All Documents' 
         : documents.find(d => d._id === selectedDoc)?.originalName || 'Unknown Document';
 
-      const response = await fetch('http://localhost:5001/api/export/conversation/txt', {
+      const response = await fetch(`${API_URL}/api/export/conversation/txt`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           conversation: conversationHistory,
           documentName: docName
         })
       });
 
-      // Check if response is OK before creating blob
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Export failed' }));
         throw new Error(errorData.message || `Export failed with status ${response.status}`);
@@ -200,8 +177,6 @@ function QueryInterface() {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-      
-      console.log('✅ TXT exported successfully');
     } catch (err) {
       console.error('Export failed:', err);
       setError(`Failed to export: ${err.message}`);
@@ -375,7 +350,7 @@ function QueryInterface() {
           <h3>No questions yet</h3>
           <p>Ask a question about your documents to get started!</p>
           
-          {/* ✅ Suggested Questions */}
+          {/* Suggested Questions */}
           {suggestions.length > 0 && (
             <div className="example-questions">
               <p className="examples-title">💡 Suggested Questions:</p>
