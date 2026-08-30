@@ -90,7 +90,7 @@ exports.queryDocuments = async (req, res) => {
     let answer;
     try {
       const completion = await groq.chat.completions.create({
-        model: "llama-3.3-70b-versatile", // Updated to newer model
+        model: "openai/gpt-oss-20b", // Updated to newer model
         messages: [
           {
             role: "system",
