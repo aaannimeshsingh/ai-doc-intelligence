@@ -11,7 +11,7 @@ const Settings = () => {
   const [accentColor, setAccentColor] = useState(localStorage.getItem('accentColor') || 'blue');
 
   // AI Model Settings
-  const [aiModel, setAiModel] = useState(localStorage.getItem('aiModel') || 'llama-3.3-70b-versatile');
+  const [aiModel, setAiModel] = useState(localStorage.getItem('aiModel') || 'openai/gpt-oss-120b');
   const [temperature, setTemperature] = useState(parseFloat(localStorage.getItem('temperature') || '0.7'));
   const [maxTokens, setMaxTokens] = useState(parseInt(localStorage.getItem('maxTokens') || '2000'));
 
@@ -226,27 +226,27 @@ const Settings = () => {
               <span className="label-desc">Choose the language model</span>
             </label>
             <select 
-              className="setting-select"
-              value={aiModel}
-              onChange={(e) => setAiModel(e.target.value)}
-            >
-              <option value="llama-3.3-70b-versatile">Llama 3.3 70B ⭐ (Recommended - Best Quality)</option>
-              <option value="llama-3.1-8b-instant">Llama 3.1 8B ⚡ (Ultra Fast)</option>
-            </select>
+  className="setting-select"
+  value={aiModel}
+  onChange={(e) => setAiModel(e.target.value)}
+>
+  <option value="openai/gpt-oss-120b">GPT-OSS 120B ⭐ (Recommended - Best Quality)</option>
+  <option value="openai/gpt-oss-20b">GPT-OSS 20B ⚡ (Ultra Fast)</option>
+</select>
             <div className="model-description">
-              {aiModel === 'llama-3.3-70b-versatile' && (
-                <p className="model-info">
-                  <strong>Llama 3.3 70B:</strong> Most accurate and intelligent. Best for complex document analysis, 
-                  detailed Q&A, and when quality matters most. Slightly slower but worth it.
-                </p>
-              )}
-              {aiModel === 'llama-3.1-8b-instant' && (
-                <p className="model-info">
-                  <strong>Llama 3.1 8B Instant:</strong> Lightning fast responses! Perfect for quick queries, 
-                  simple questions, and when speed is priority. Still very capable for most tasks.
-                </p>
-              )}
-            </div>
+  {aiModel === 'openai/gpt-oss-120b' && (
+    <p className="model-info">
+      <strong>GPT-OSS 120B:</strong> Most accurate and intelligent. Best for complex document analysis, 
+      detailed Q&A, and when quality matters most. Slightly slower but worth it.
+    </p>
+  )}
+  {aiModel === 'openai/gpt-oss-20b' && (
+    <p className="model-info">
+      <strong>GPT-OSS 20B:</strong> Lightning fast responses! Perfect for quick queries, 
+      simple questions, and when speed is priority. Still very capable for most tasks.
+    </p>
+  )}
+</div>
           </div>
 
           <div className="setting-item">
