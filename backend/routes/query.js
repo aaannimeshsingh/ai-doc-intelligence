@@ -17,13 +17,24 @@ router.post('/', protect, async (req, res) => {
     const { question, documentId, settings } = req.body;
 
     // Extract settings with defaults ✅
-    const {
-      aiModel = 'llama-3.3-70b-versatile',
-      temperature = 0.7,
-      maxTokens = 2000,
-      topK = 3,
-      chunkSize = 1000
-    } = settings || {};
+const {
+  aiModel: requestedModel = 'llama-3.3-70b-versatile',
+  temperature = 0.7,
+  maxTokens = 2000,
+  topK = 3,
+  chunkSize = 1000
+} = settings || {};
+
+// ✅ Map deprecated/invalid model names to currently supported Groq models
+const MODEL_MAP = {
+  'llama-3.1-8b-instant': 'openai/gpt-oss-20b',
+  'llama-3.3-70b-versatile': 'openai/gpt-oss-120b'
+};
+const VALID_MODELS = new Set(['openai/gpt-oss-20b', 'openai/gpt-oss-120b', 'qwen/qwen3.6-27b']);
+
+const aiModel = VALID_MODELS.has(requestedModel)
+  ? requestedModel
+  : (MODEL_MAP[requestedModel] || 'openai/gpt-oss-20b');
 
     if (!question || !question.trim()) {
       return res.status(400).json({
