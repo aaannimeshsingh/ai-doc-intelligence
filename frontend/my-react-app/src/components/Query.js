@@ -22,7 +22,7 @@ const Query = () => {
 
   // ✅ NEW: Load settings from localStorage
   const [settings, setSettings] = useState({
-    aiModel: localStorage.getItem('aiModel') || 'llama-3.3-70b-versatile',
+    aiModel: localStorage.getItem('aiModel') || 'openai/gpt-oss-20b',
     temperature: parseFloat(localStorage.getItem('temperature') || '0.7'),
     maxTokens: parseInt(localStorage.getItem('maxTokens') || '2000'),
     topK: parseInt(localStorage.getItem('topK') || '3'),
