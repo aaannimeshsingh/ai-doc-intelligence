@@ -1,3 +1,4 @@
+const Groq = require('groq-sdk');
 // Add this to your server.js or create a new health.js route
 
 const { HfInference } = require('@huggingface/inference');
