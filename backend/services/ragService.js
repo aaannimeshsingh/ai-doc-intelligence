@@ -1,6 +1,5 @@
-// backend/services/ragService.js - Updated with dynamic topK
+// backend/services/ragService.js - Local embeddings + timeout on query embedding
 const { Pinecone } = require('@pinecone-database/pinecone');
-const { HuggingFaceInferenceEmbeddings } = require('@langchain/community/embeddings/hf');
 const { RecursiveCharacterTextSplitter } = require('@langchain/textsplitters');
 
 const BATCH_SIZE = 50;
@@ -14,10 +13,8 @@ class RAGService {
       this.indexName = process.env.PINECONE_INDEX_NAME;
       this.index = this.pinecone.index(this.indexName);
 
-      this.embeddings = new HuggingFaceInferenceEmbeddings({
-        apiKey: process.env.HUGGINGFACE_API_KEY,
-        model: 'sentence-transformers/all-MiniLM-L6-v2'
-      });
+      // Local embeddings (all-MiniLM-L6-v2, 384 dims) - no HuggingFace credits needed
+      this.embeddings = require('./embeddingService').embeddings;
 
       console.log('✅ RAG Service initialized');
       console.log('📌 Index:', this.indexName);
@@ -185,8 +182,14 @@ class RAGService {
         return [];
       }
 
-      // Generate query embedding
-      const queryEmbedding = await this.embeddings.embedQuery(question);
+      // Generate query embedding (20s timeout so a failure falls back quickly;
+      // the first call after a deploy is slower because the model has to load)
+      const queryEmbedding = await Promise.race([
+        this.embeddings.embedQuery(question),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Embedding timeout')), 20000)
+        )
+      ]);
       console.log('✅ Query embedding generated, dim:', queryEmbedding.length);
 
       // Prepare query options with dynamic topK ✅
