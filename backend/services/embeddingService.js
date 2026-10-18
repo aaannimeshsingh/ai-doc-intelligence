@@ -1,11 +1,48 @@
-const { HuggingFaceInferenceEmbeddings } = require('@langchain/community/embeddings/hf');
+// backend/services/embeddingService.js
+// Local embeddings (no HuggingFace API / credits needed).
+// Same model family as before: all-MiniLM-L6-v2 -> 384 dimensions,
+// so it stays compatible with the existing Pinecone index.
+
+let extractorPromise = null;
+
+async function getExtractor() {
+  if (!extractorPromise) {
+    extractorPromise = (async () => {
+      // @xenova/transformers is ESM, so it must be loaded with dynamic import() from CommonJS
+      const { pipeline, env } = await import('@xenova/transformers');
+      env.cacheDir = '/tmp/transformers-cache';
+      console.log('⏳ Loading local embedding model (first time only)...');
+      const extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+      console.log('✅ Local embedding model loaded');
+      return extractor;
+    })().catch((err) => {
+      extractorPromise = null; // allow retry on next call
+      throw err;
+    });
+  }
+  return extractorPromise;
+}
+
+// Same interface the rest of the code expects (embedQuery / embedDocuments)
+const localEmbeddings = {
+  async embedQuery(text) {
+    const extractor = await getExtractor();
+    const output = await extractor(text, { pooling: 'mean', normalize: true });
+    return Array.from(output.data);
+  },
+
+  async embedDocuments(texts) {
+    const results = [];
+    for (const t of texts) {
+      results.push(await this.embedQuery(t));
+    }
+    return results;
+  }
+};
 
 class EmbeddingService {
   constructor() {
-    this.embeddings = new HuggingFaceInferenceEmbeddings({
-      apiKey: process.env.HUGGINGFACE_API_KEY,
-      model: "sentence-transformers/all-MiniLM-L6-v2"
-    });
+    this.embeddings = localEmbeddings;
   }
 
   /**
@@ -22,7 +59,7 @@ class EmbeddingService {
       console.log(`🔄 Generating embedding for text (${text.length} chars)...`);
       const embedding = await this.embeddings.embedQuery(text);
       console.log(`✅ Embedding generated (${embedding.length} dimensions)`);
-      
+
       return embedding;
     } catch (error) {
       console.error('❌ Error generating embedding:', error);
@@ -44,7 +81,7 @@ class EmbeddingService {
       console.log(`🔄 Generating embeddings for ${texts.length} texts...`);
       const embeddings = await this.embeddings.embedDocuments(texts);
       console.log(`✅ Generated ${embeddings.length} embeddings`);
-      
+
       return embeddings;
     } catch (error) {
       console.error('❌ Error generating batch embeddings:', error);
@@ -114,7 +151,7 @@ class EmbeddingService {
     try {
       console.log('🔍 Running embedding service health check...');
       const testEmbedding = await this.embedText("test");
-      
+
       if (!testEmbedding || testEmbedding.length === 0) {
         throw new Error('Generated embedding is empty');
       }
